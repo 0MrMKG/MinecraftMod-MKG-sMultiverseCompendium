@@ -1,0 +1,13 @@
+{
+  "itemGroup.mkgmultiversecompendium": "Example Mod Tab",
+  "block.mkgmultiversecompendium.example_block": "Example Block",
+  "item.mkgmultiversecompendium.example_item": "Example Item",
+
+  "mkgmultiversecompendium.configuration.title": "MKGMultiverseCompendium Configs",
+  "mkgmultiversecompendium.configuration.section.mkgmultiversecompendium.common.toml": "MKGMultiverseCompendium Configs",
+  "mkgmultiversecompendium.configuration.section.mkgmultiversecompendium.common.toml.title": "MKGMultiverseCompendium Configs",
+  "mkgmultiversecompendium.configuration.items": "Item List",
+  "mkgmultiversecompendium.configuration.logDirtBlock": "Log Dirt Block",
+  "mkgmultiversecompendium.configuration.magicNumberIntroduction": "Magic Number Text",
+  "mkgmultiversecompendium.configuration.magicNumber": "Magic Number"
+}
