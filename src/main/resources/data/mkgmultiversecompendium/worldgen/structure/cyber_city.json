@@ -1,0 +1,7 @@
+{
+  "type": "mkgmultiversecompendium:cyber_city",
+  "biomes": "#minecraft:has_structure/stronghold",
+  "step": "surface_structures",
+  "spawn_overrides": {},
+  "terrain_adaptation": "beard_thin"
+}
