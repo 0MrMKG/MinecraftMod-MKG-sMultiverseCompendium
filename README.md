@@ -1,25 +1,24 @@
+2026-3-4 update v0.1:
+    制定了nbt标准命名规则：
 
-Installation information
-=======
+```
+【全局唯一的建筑】                 [unique] (限制全局/区块生成数量)
 
-This template repository can be directly cloned to get you started with a new
-mod. Simply create a new repository cloned from this one, by following the
-instructions provided by [GitHub](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
+【建筑封口层】      [roof] (屋顶) ── [branch] (依附物)           
+                    ▲                                
+                    │              
+                    │                                
+【标准楼层】        [upper_floor] (第二层及以上房屋) ──┬── [joint_w/e/s/n] (转向枢纽) ── [Bridge] (桥梁/栈道)
+                    ▲                                │
+                    │                                └── [platform] (随机生成的平台) ── [branch] (依附物)
+                    │
+                    │ 
+                    │
+【底层锚点】        [root] (第一层房屋主体) ─────────┬─── [path] (街道)
+                    ▲                              │
+                    │                              └── [root_platform] (底层平台/广场) ── [branch] (依附物)
+                    │ 
+                    │ 
+【地基】          [base] 
+```
 
-Once you have your clone, simply open the repository in the IDE of your choice. The usual recommendation for an IDE is either IntelliJ IDEA or Eclipse.
-
-If at any point you are missing libraries in your IDE, or you've run into problems you can
-run `gradlew --refresh-dependencies` to refresh the local cache. `gradlew clean` to reset everything 
-{this does not affect your code} and then start the process again.
-
-Mapping Names:
-============
-By default, the MDK is configured to use the official mapping names from Mojang for methods and fields 
-in the Minecraft codebase. These names are covered by a specific license. All modders should be aware of this
-license. For the latest license text, refer to the mapping file itself, or the reference copy here:
-https://github.com/NeoForged/NeoForm/blob/main/Mojang.md
-
-Additional Resources: 
-==========
-Community Documentation: https://docs.neoforged.net/  
-NeoForged Discord: https://discord.neoforged.net/
