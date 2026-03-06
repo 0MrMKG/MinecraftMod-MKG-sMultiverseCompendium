@@ -1,4 +1,4 @@
-package com.mkgmultiversecompendium.worldgen.structure;
+package com.mkgmultiversecompendium.worldgen.structure.cybercity_fortest;
 
 import com.mkgmultiversecompendium.registry.ModStructures;
 import com.mojang.serialization.MapCodec;
@@ -15,8 +15,9 @@ import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
-import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class CyberCityStructure extends Structure {
@@ -47,77 +48,111 @@ public class CyberCityStructure extends Structure {
     /**
      * ==================================== ==================================== ====================================
      * */
-    private void generateModularStack(StructurePiecesBuilder builder, GenerationContext context, BlockPos startPos, Rotation rotation) {
+
+    public void generateModularStack(StructurePiecesBuilder builder, GenerationContext context, BlockPos startPos, Rotation rotation) {
         StructureTemplateManager manager = context.structureTemplateManager();
+        if (manager == null) return;
+
         WorldgenRandom random = context.random();
         String ns = "mkgmultiversecompendium";
 
-        // ==========================================
-        // 1. 参数定义
-        // ==========================================
         int rangeX = 64;
         int rangeZ = 64;
-        int overlap = 1;
-        int maxTowers = 100;
-
-        // 预获取底座尺寸
-        Vec3i baseDim = manager.get(ResourceLocation.fromNamespaceAndPath(ns, "test_base_1"))
-                .map(t -> t.getSize(rotation)).orElse(new Vec3i(8, 4, 8));
 
         // ==========================================
-        // 2. 第一阶段：平铺底座 (保持原朝向以对齐地板)
+        // 1. 获取【未旋转】时的原始尺寸 (至关重要)
         // ==========================================
-        int stepX = baseDim.getX() - overlap;
-        int stepZ = baseDim.getZ() - overlap;
-        for (int x = 0; x < rangeX; x += stepX) {
-            for (int z = 0; z < rangeZ; z += stepZ) {
-                BlockPos gridPos = startPos.offset(x, 0, z);
-                CyberpunkPiece basePiece = new CyberpunkPiece(manager, "test_base_1", gridPos, rotation);
+        ResourceLocation baseRL = ResourceLocation.fromNamespaceAndPath(ns, "test_base_1");
+        // 注意：这里传入 Rotation.NONE，获取模块最原始的长宽高
+        Vec3i rawBaseDim = manager.get(baseRL).map(t -> t.getSize(Rotation.NONE)).orElse(new Vec3i(8, 4, 8));
+
+        // 原始步长，减去1格重叠防止黑线
+        int stepX = Math.max(1, rawBaseDim.getX() - 1);
+        int stepZ = Math.max(1, rawBaseDim.getZ() - 1);
+        int baseY = rawBaseDim.getY();
+
+        // ==========================================
+        // 2. 第一阶段：局部坐标系下的地毯式铺设
+        // ==========================================
+        for (int lx = 0; lx <= rangeX; lx += stepX) {
+            for (int lz = 0; lz <= rangeZ; lz += stepZ) {
+                // 将局部偏移量转化为世界旋转偏移量
+                BlockPos worldOffset = getRotatedOffset(lx, 0, lz, rotation);
+                BlockPos finalPos = startPos.offset(worldOffset);
+
+                CyberpunkPiece basePiece = new CyberpunkPiece(manager, "test_base_1", finalPos, rotation);
                 builder.addPiece(basePiece);
                 builder.getBoundingBox().encapsulate(basePiece.getBoundingBox());
             }
         }
 
         // ==========================================
-        // 3. 第二阶段：随机生成 100 座异形塔
+        // 3. 第二阶段：两排房屋 (局部网格对齐)
         // ==========================================
-        for (int i = 0; i < maxTowers; i++) {
-            // 随机坐标
-            int randX = random.nextInt(rangeX);
-            int randZ = random.nextInt(rangeZ);
+        // 局部 Z 轴位置：第一排在 16，第二排在 48
+        int[] localZRows = { 16, 48 };
 
-            // 【新增：随机高度偏移】 0-2 格的随机向上位移
-            int heightOffset = random.nextInt(3);
-            BlockPos towerBasePos = startPos.offset(randX, heightOffset, randZ);
+        for (int i = 0; i < localZRows.length; i++) {
+            int lz = localZRows[i];
 
-            // 【新增：随机旋转】 让每座塔的朝向都不一样
-            Rotation towerRot = Rotation.getRandom(random);
+            // 面对面逻辑
+            Rotation houseFacing = (i == 0) ? rotation : rotation.getRotated(Rotation.CLOCKWISE_180);
 
-            // 随机总层数
-            int towerFloors = 3 + random.nextInt(6);
-            int currentY = 0;
+            // 局部 X 轴遍历
+            for (int lx = 8; lx <= rangeX - 8; lx += 18) {
 
-            for (int f = 0; f < towerFloors; f++) {
-                // 选择 NBT 模块
-                String pieceName = (f == 0) ? "test_root_1" : (f == towerFloors - 1) ? "test_roof_1" : "test_upper_floor_1";
-                BlockPos floorPos = towerBasePos.above(currentY);
+                int randHeight = random.nextInt(3); // 0-2格高度起伏
+                int houseStartY = baseY + randHeight;
 
-                // 使用随机后的 towerRot
-                CyberpunkPiece towerPiece = new CyberpunkPiece(manager, pieceName, floorPos, towerRot);
-                builder.addPiece(towerPiece);
-                builder.getBoundingBox().encapsulate(towerPiece.getBoundingBox());
+                // --- 垂直补全地基 ---
+                for (int h = 1; h <= randHeight; h++) {
+                    BlockPos downOffset = getRotatedOffset(lx, houseStartY - h, lz, rotation);
+                    CyberpunkPiece foundation = new CyberpunkPiece(manager, "test_base_1", startPos.offset(downOffset), rotation);
+                    builder.addPiece(foundation);
+                    builder.getBoundingBox().encapsulate(foundation.getBoundingBox());
+                }
 
-                // 动态累加高度（注意：高度必须基于该模块在对应旋转下的尺寸）
-                currentY += manager.get(ResourceLocation.fromNamespaceAndPath(ns, pieceName))
-                        .map(t -> t.getSize(towerRot).getY()).orElse(4);
+                // --- 堆叠楼层 ---
+                int currentLocalY = houseStartY;
+                int totalFloors = 3 + random.nextInt(4); // 3-6 层
 
-                // 30% 概率生成桥梁（也会继承塔的随机朝向）
-                if (f > 1 && f < towerFloors - 1 && random.nextFloat() < 0.3f) {
-                    CyberpunkPiece bridge = new CyberpunkPiece(manager, "test_bridge_1", floorPos, towerRot);
-                    builder.addPiece(bridge);
-                    builder.getBoundingBox().encapsulate(bridge.getBoundingBox());
+                for (int f = 0; f < totalFloors; f++) {
+                    String pieceName = (f == 0) ? "test_root_1" : (f == totalFloors - 1) ? "test_roof_1" : "test_upper_floor_1";
+
+                    // 计算这一层的绝对世界坐标
+                    BlockPos floorWorldOffset = getRotatedOffset(lx, currentLocalY, lz, rotation);
+                    BlockPos floorFinalPos = startPos.offset(floorWorldOffset);
+
+                    CyberpunkPiece housePiece = new CyberpunkPiece(manager, pieceName, floorFinalPos, houseFacing);
+                    builder.addPiece(housePiece);
+                    builder.getBoundingBox().encapsulate(housePiece.getBoundingBox());
+
+                    // 获取该模块在【未旋转】时的原始高度
+                    int floorRawHeight = manager.get(ResourceLocation.fromNamespaceAndPath(ns, pieceName))
+                            .map(t -> t.getSize(Rotation.NONE).getY())
+                            .orElse(4);
+
+                    currentLocalY += floorRawHeight;
                 }
             }
+        }
+    }
+
+    /**
+     * 核心坐标转换工具：将局部偏移量转化为基于整体朝向的世界偏移量
+     * 彻底解决旋转后坐标撕裂、漂移的问题
+     */
+    private BlockPos getRotatedOffset(int localX, int localY, int localZ, Rotation rotation) {
+        switch (rotation) {
+            case CLOCKWISE_90:
+                return new BlockPos(-localZ, localY, localX);
+            case CLOCKWISE_180:
+                return new BlockPos(-localX, localY, -localZ);
+            case COUNTERCLOCKWISE_90:
+                return new BlockPos(localZ, localY, -localX);
+            case NONE:
+            default:
+                return new BlockPos(localX, localY, localZ);
         }
     }
     /**

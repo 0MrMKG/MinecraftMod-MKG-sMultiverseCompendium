@@ -1,7 +1,7 @@
 package com.mkgmultiversecompendium.registry;
 
 import com.mkgmultiversecompendium.MKGMultiverseCompendium;
-import com.mkgmultiversecompendium.worldgen.structure.CyberCityStructure;
+import com.mkgmultiversecompendium.worldgen.structure.cybercity_fortest.CyberCityStructure;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.neoforged.neoforge.registries.DeferredRegister;

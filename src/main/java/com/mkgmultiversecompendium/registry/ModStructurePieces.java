@@ -1,7 +1,7 @@
 package com.mkgmultiversecompendium.registry;
 
 import com.mkgmultiversecompendium.MKGMultiverseCompendium;
-import com.mkgmultiversecompendium.worldgen.structure.CyberpunkPiece;
+import com.mkgmultiversecompendium.worldgen.structure.cybercity_fortest.CyberpunkPiece;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
 import net.neoforged.neoforge.registries.DeferredRegister;
