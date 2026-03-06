@@ -60,74 +60,103 @@ public class CyberCityStructure extends Structure {
         int rangeZ = 64;
 
         // ==========================================
-        // 1. 获取【未旋转】时的原始尺寸 (至关重要)
+        // 【新增：控制接口】 (你可以将这四个变量移到方法参数中)
         // ==========================================
-        ResourceLocation baseRL = ResourceLocation.fromNamespaceAndPath(ns, "test_base_1");
-        // 注意：这里传入 Rotation.NONE，获取模块最原始的长宽高
-        Vec3i rawBaseDim = manager.get(baseRL).map(t -> t.getSize(Rotation.NONE)).orElse(new Vec3i(8, 4, 8));
+        int housesPerRow = 5;       // 控制接口：每排生成几栋房子
+        int streetWidth = 20;       // 控制接口：两排房子之间的“街道”宽度 (Z轴方向)
+        int houseSpacingX = 4;      // 【新增】控制接口：同一排房屋之间的距离 (X轴方向)
 
-        // 原始步长，减去1格重叠防止黑线
-        int stepX = Math.max(1, rawBaseDim.getX() - 1);
-        int stepZ = Math.max(1, rawBaseDim.getZ() - 1);
+        // ==========================================
+        // 1. 获取基础模块的原始尺寸 (Rotation.NONE)
+        // ==========================================
+        Vec3i rawBaseDim = manager.get(ResourceLocation.fromNamespaceAndPath(ns, "test_base_1"))
+                .map(t -> t.getSize(Rotation.NONE)).orElse(new Vec3i(8, 4, 8));
+
+        Vec3i rawRootDim = manager.get(ResourceLocation.fromNamespaceAndPath(ns, "test_root_1"))
+                .map(t -> t.getSize(Rotation.NONE)).orElse(new Vec3i(8, 4, 8));
+
         int baseY = rawBaseDim.getY();
 
         // ==========================================
-        // 2. 第一阶段：局部坐标系下的地毯式铺设
+        // 2. 铺设地基 (局部坐标系)
         // ==========================================
+        int stepX = Math.max(1, rawBaseDim.getX() - 1);
+        int stepZ = Math.max(1, rawBaseDim.getZ() - 1);
+
         for (int lx = 0; lx <= rangeX; lx += stepX) {
             for (int lz = 0; lz <= rangeZ; lz += stepZ) {
-                // 将局部偏移量转化为世界旋转偏移量
                 BlockPos worldOffset = getRotatedOffset(lx, 0, lz, rotation);
-                BlockPos finalPos = startPos.offset(worldOffset);
-
-                CyberpunkPiece basePiece = new CyberpunkPiece(manager, "test_base_1", finalPos, rotation);
+                CyberpunkPiece basePiece = new CyberpunkPiece(manager, "test_base_1", startPos.offset(worldOffset), rotation);
                 builder.addPiece(basePiece);
                 builder.getBoundingBox().encapsulate(basePiece.getBoundingBox());
             }
         }
 
         // ==========================================
-        // 3. 第二阶段：两排房屋 (局部网格对齐)
+        // 3. 动态计算以中轴线为对称的房屋 Z 坐标
         // ==========================================
-        // 局部 Z 轴位置：第一排在 16，第二排在 48
-        int[] localZRows = { 16, 48 };
+        int centerZ = rangeZ / 2; // 地基中轴线 (Z = 32)
 
+        // 第一排在北边，面向街道 (+Z)
+        int row0_lz = centerZ - (streetWidth / 2) - rawRootDim.getZ();
+        // 第二排在南边，面向街道 (旋转180度后，向-Z生长)
+        int row1_lz = centerZ + (streetWidth / 2);
+
+        int[] localZRows = { row0_lz, row1_lz };
+
+        // ==========================================
+        // 4. 【修改点】计算房屋在 X 轴的分布 (居中对齐算法)
+        // ==========================================
+        // 计算这一排房屋的总跨度：所有房屋的宽度之和 + 所有间距的宽度之和
+        int totalRowWidthX = (housesPerRow * rawRootDim.getX()) + ((housesPerRow - 1) * houseSpacingX);
+
+        // 计算起步的 X 坐标，让这一整排房子在地基 (rangeX) 上完美居中
+        int startLx = (rangeX - totalRowWidthX) / 2;
+
+        // ==========================================
+        // 5. 生成房屋
+        // ==========================================
         for (int i = 0; i < localZRows.length; i++) {
-            int lz = localZRows[i];
-
-            // 面对面逻辑
+            int baseLz = localZRows[i];
             Rotation houseFacing = (i == 0) ? rotation : rotation.getRotated(Rotation.CLOCKWISE_180);
 
-            // 局部 X 轴遍历
-            for (int lx = 8; lx <= rangeX - 8; lx += 18) {
+            for (int j = 0; j < housesPerRow; j++) {
+                // 【修改点】当前房屋的逻辑左上角 X 坐标
+                int baseLx = startLx + j * (rawRootDim.getX() + houseSpacingX);
 
-                int randHeight = random.nextInt(3); // 0-2格高度起伏
+                // 180度旋转的锚点偏移补偿
+                int houseAnchorX = (i == 0) ? baseLx : baseLx + rawRootDim.getX() - 1;
+                int houseAnchorZ = (i == 0) ? baseLz : baseLz + rawRootDim.getZ() - 1;
+
+                // 地基补全的锚点同理 (以地基的尺寸为准)
+                int foundAnchorX = (i == 0) ? baseLx : baseLx + rawBaseDim.getX() - 1;
+                int foundAnchorZ = (i == 0) ? baseLz : baseLz + rawBaseDim.getZ() - 1;
+
+                int randHeight = random.nextInt(3); // 0-2格起伏
                 int houseStartY = baseY + randHeight;
 
                 // --- 垂直补全地基 ---
                 for (int h = 1; h <= randHeight; h++) {
-                    BlockPos downOffset = getRotatedOffset(lx, houseStartY - h, lz, rotation);
-                    CyberpunkPiece foundation = new CyberpunkPiece(manager, "test_base_1", startPos.offset(downOffset), rotation);
+                    BlockPos downOffset = getRotatedOffset(foundAnchorX, houseStartY - h, foundAnchorZ, rotation);
+                    CyberpunkPiece foundation = new CyberpunkPiece(manager, "test_base_1", startPos.offset(downOffset), houseFacing);
                     builder.addPiece(foundation);
                     builder.getBoundingBox().encapsulate(foundation.getBoundingBox());
                 }
 
                 // --- 堆叠楼层 ---
                 int currentLocalY = houseStartY;
-                int totalFloors = 3 + random.nextInt(4); // 3-6 层
+                int totalFloors = 3 + random.nextInt(4);
 
                 for (int f = 0; f < totalFloors; f++) {
                     String pieceName = (f == 0) ? "test_root_1" : (f == totalFloors - 1) ? "test_roof_1" : "test_upper_floor_1";
 
-                    // 计算这一层的绝对世界坐标
-                    BlockPos floorWorldOffset = getRotatedOffset(lx, currentLocalY, lz, rotation);
-                    BlockPos floorFinalPos = startPos.offset(floorWorldOffset);
+                    BlockPos floorWorldOffset = getRotatedOffset(houseAnchorX, currentLocalY, houseAnchorZ, rotation);
+                    CyberpunkPiece housePiece = new CyberpunkPiece(manager, pieceName, startPos.offset(floorWorldOffset), houseFacing);
 
-                    CyberpunkPiece housePiece = new CyberpunkPiece(manager, pieceName, floorFinalPos, houseFacing);
                     builder.addPiece(housePiece);
                     builder.getBoundingBox().encapsulate(housePiece.getBoundingBox());
 
-                    // 获取该模块在【未旋转】时的原始高度
+                    // 获取并累加真实高度
                     int floorRawHeight = manager.get(ResourceLocation.fromNamespaceAndPath(ns, pieceName))
                             .map(t -> t.getSize(Rotation.NONE).getY())
                             .orElse(4);
