@@ -14,6 +14,7 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.TemplateStructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
+import net.minecraft.world.level.levelgen.structure.templatesystem.BlockIgnoreProcessor;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
@@ -41,37 +42,38 @@ public class CyberpunkPiece extends TemplateStructurePiece {
 
     @Override
     public void postProcess(WorldGenLevel level, StructureManager structureManager, ChunkGenerator generator, RandomSource random, BoundingBox box, ChunkPos chunkPos, BlockPos pos) {
-        // 1. 放置地标
+        // 1. 放置地标 (保持不变)
         level.setBlock(this.templatePosition, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
         level.setBlock(this.templatePosition.above(), Blocks.REDSTONE_TORCH.defaultBlockState(), 3);
 
         // --- 修复获取 TemplateManager 的代码 ---
-        // 从当前生成世界中获取正确的 StructureTemplateManager
         StructureTemplateManager templateManager = level.getLevel().getServer().getStructureManager();
         Optional<StructureTemplate> optionalTemplate = templateManager.get(this.templatePath);
 
         if (optionalTemplate.isPresent()) {
             StructureTemplate template = optionalTemplate.get();
-            System.out.println("==================================================");
-            System.out.println("【成功读取 NBT】");
-            System.out.println("文件路径: " + this.templatePath);
-            System.out.println("实际尺寸: " + template.getSize());
-            System.out.println("目标位置: " + this.templatePosition);
-            System.out.println("==================================================");
 
             if (template.getSize().getX() == 0) {
-                System.err.println("【警告】尺寸依然是 0！你可能忘记刷新 Gradle 缓存了！");
+                System.err.println("【警告】尺寸为 0！");
             } else {
-                // ！！！终极暴力放置！！！
+                // ==========================================
+                // 【核心修改点】设置忽略空气的处理器
+                // ==========================================
                 StructurePlaceSettings forcedSettings = new StructurePlaceSettings()
                         .setRotation(this.placeSettings.getRotation())
-                        .setIgnoreEntities(false);
+                        .setMirror(this.placeSettings.getMirror()) // 建议同步镜像设置
+                        .setIgnoreEntities(false)
+                        // 添加这一行：忽略 NBT 里的空气方块，保护世界原本的方块
+                        .addProcessor(BlockIgnoreProcessor.AIR)
+                        .setBoundingBox(box); // 确保只在当前区块范围内处理
 
+                // 使用 flag 2 (仅同步到客户端，不触发方块更新)，从源头减少掉落物
                 template.placeInWorld(level, this.templatePosition, this.templatePosition, forcedSettings, random, 2);
-                System.out.println("【执行】已强制将模板放置于世界中！");
+
+                System.out.println("【执行】已执行“空气掩码”放置逻辑，交叉部分已融合！");
             }
         } else {
-            System.err.println("【致命错误】运行时环境根本找不到 " + this.templatePath + " 文件！");
+            System.err.println("【致命错误】找不到文件: " + this.templatePath);
         }
     }
     @Override

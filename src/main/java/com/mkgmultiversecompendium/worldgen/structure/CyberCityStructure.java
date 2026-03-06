@@ -9,11 +9,13 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+import net.minecraft.world.phys.AABB;
 
 import java.util.Optional;
 
@@ -42,82 +44,96 @@ public class CyberCityStructure extends Structure {
         }));
     }
 
+    /**
+     * ==================================== ==================================== ====================================
+     * */
     private void generateModularStack(StructurePiecesBuilder builder, GenerationContext context, BlockPos startPos, Rotation rotation) {
         StructureTemplateManager manager = context.structureTemplateManager();
-
-//        // ==========================================
-//        // ▼ 灵活的链式调用接口展示 ▼
-//        // ==========================================
-//        // 1. 在原点放 1 个底座 (test1)
-//        BlockPos currentPos = appendPieces(builder, manager, startPos, rotation, Direction.UP, "test1", 1, 0);
-//        // 2. 接着往上叠 3 层楼 (test2)，完美贴合 (间距0)
-//        currentPos = appendPieces(builder, manager, currentPos, rotation, Direction.UP, "test2", 3, 0);
-//        // 3. 然后向东（X正方向）铺开 2 个底座 (test1)，互相间隔 5 格
-//        currentPos = appendPieces(builder, manager, currentPos, rotation, Direction.EAST, "test1", 2, 5);
-//        // 4. 最后在新的位置向南延伸 1 个 test2
-//        appendPieces(builder, manager, currentPos, rotation, Direction.SOUTH, "test2", 1, 0);
-
+        WorldgenRandom random = context.random();
+        String ns = "mkgmultiversecompendium";
 
         // ==========================================
-        // 1. 核心参数设置 (10宽 x 4高)
+        // 1. 参数定义
         // ==========================================
-        int width = 10;   // 墙的宽度（列数）
-        int height = 4;   // 每一列的总高度（1个底座 + 3个楼层）
-        int offset = 4;   // 斜对角的偏移量（格数）
+        int rangeX = 64;
+        int rangeZ = 64;
+        int overlap = 1;
+        int maxTowers = 100;
 
-        // 定义墙的延伸方向（宽度方向）和 建筑后退的深度方向（斜对角的另一轴）
-        Direction wallDirection = Direction.EAST;
-        Direction depthDirection = Direction.SOUTH;
-
-        // 根据整个城市的随机旋转，计算出绝对的物理朝向
-        Direction actualWallDir = rotation.rotate(wallDirection);
-        Direction actualDepthDir = rotation.rotate(depthDirection);
+        // 预获取底座尺寸
+        Vec3i baseDim = manager.get(ResourceLocation.fromNamespaceAndPath(ns, "test_base_1"))
+                .map(t -> t.getSize(rotation)).orElse(new Vec3i(8, 4, 8));
 
         // ==========================================
-        // 2. 预读取 NBT 尺寸 (防止高度计算错误)
+        // 2. 第一阶段：平铺底座 (保持原朝向以对齐地板)
         // ==========================================
-        ResourceLocation baseLoc = ResourceLocation.fromNamespaceAndPath("mkgmultiversecompendium", "test1");
-        ResourceLocation floorLoc = ResourceLocation.fromNamespaceAndPath("mkgmultiversecompendium", "test2");
-
-        // 如果没读到，给个默认尺寸防止崩溃
-        Vec3i baseSize = manager.get(baseLoc).map(t -> t.getSize(rotation)).orElse(new Vec3i(5, 5, 5));
-        Vec3i floorSize = manager.get(floorLoc).map(t -> t.getSize(rotation)).orElse(new Vec3i(5, 5, 5));
-
-        // ==========================================
-        // 3. 矩阵生成核心循环
-        // ==========================================
-        BlockPos currentColumnBase = startPos;
-
-        // 外层循环：横向平移，生成 10 列
-        for (int col = 0; col < width; col++) {
-            BlockPos currentPos = currentColumnBase;
-
-            // 内层循环：纵向堆叠，生成 4 层
-            for (int layer = 0; layer < height; layer++) {
-                // 第一层用 test1，上面全用 test2
-                String pieceName = (layer == 0) ? "test1" : "test2";
-                builder.addPiece(new CyberpunkPiece(manager, pieceName, currentPos, rotation));
-                // 获取当前这块建筑的高度，以便知道下一个建筑该往上抬多高
-                int currentPieceYSize = (layer == 0) ? baseSize.getY() : floorSize.getY();
-                // 关键逻辑：如果下一层是“最上面两层”的一员，就不偏移（竖直向上）
-                // height = 4 的情况：layer 为 0, 1 时发生偏移，layer 为 2 时（即倒数第二层）不再偏移，使最高两层垂直对齐。
-                boolean nextIsVertical = (layer >= height - 2);
-                // 计算对角线偏移向量：墙的方向偏移 4 格 + 深度的方向偏移 4 格
-                int stepX = nextIsVertical ? 0 : -(actualWallDir.getStepX() * offset - actualDepthDir.getStepX() * offset);
-                int stepZ = nextIsVertical ? 0 : -(actualWallDir.getStepZ() * offset - actualDepthDir.getStepZ() * offset);
-                // 坐标指针移动到下一个位置
-                currentPos = currentPos.offset(stepX, currentPieceYSize, stepZ);
+        int stepX = baseDim.getX() - overlap;
+        int stepZ = baseDim.getZ() - overlap;
+        for (int x = 0; x < rangeX; x += stepX) {
+            for (int z = 0; z < rangeZ; z += stepZ) {
+                BlockPos gridPos = startPos.offset(x, 0, z);
+                CyberpunkPiece basePiece = new CyberpunkPiece(manager, "test_base_1", gridPos, rotation);
+                builder.addPiece(basePiece);
+                builder.getBoundingBox().encapsulate(basePiece.getBoundingBox());
             }
-            // 一列盖完了，准备盖下一列。
-            // 下一列的起点紧贴着当前列的宽度，深度不变。
-            int nextColX = actualWallDir.getStepX() * baseSize.getX();
-            int nextColZ = actualWallDir.getStepZ() * baseSize.getZ();
-
-            currentColumnBase = currentColumnBase.offset(nextColX, 0, nextColZ);
         }
 
+        // ==========================================
+        // 3. 第二阶段：随机生成 100 座异形塔
+        // ==========================================
+        for (int i = 0; i < maxTowers; i++) {
+            // 随机坐标
+            int randX = random.nextInt(rangeX);
+            int randZ = random.nextInt(rangeZ);
 
+            // 【新增：随机高度偏移】 0-2 格的随机向上位移
+            int heightOffset = random.nextInt(3);
+            BlockPos towerBasePos = startPos.offset(randX, heightOffset, randZ);
 
+            // 【新增：随机旋转】 让每座塔的朝向都不一样
+            Rotation towerRot = Rotation.getRandom(random);
+
+            // 随机总层数
+            int towerFloors = 3 + random.nextInt(6);
+            int currentY = 0;
+
+            for (int f = 0; f < towerFloors; f++) {
+                // 选择 NBT 模块
+                String pieceName = (f == 0) ? "test_root_1" : (f == towerFloors - 1) ? "test_roof_1" : "test_upper_floor_1";
+                BlockPos floorPos = towerBasePos.above(currentY);
+
+                // 使用随机后的 towerRot
+                CyberpunkPiece towerPiece = new CyberpunkPiece(manager, pieceName, floorPos, towerRot);
+                builder.addPiece(towerPiece);
+                builder.getBoundingBox().encapsulate(towerPiece.getBoundingBox());
+
+                // 动态累加高度（注意：高度必须基于该模块在对应旋转下的尺寸）
+                currentY += manager.get(ResourceLocation.fromNamespaceAndPath(ns, pieceName))
+                        .map(t -> t.getSize(towerRot).getY()).orElse(4);
+
+                // 30% 概率生成桥梁（也会继承塔的随机朝向）
+                if (f > 1 && f < towerFloors - 1 && random.nextFloat() < 0.3f) {
+                    CyberpunkPiece bridge = new CyberpunkPiece(manager, "test_bridge_1", floorPos, towerRot);
+                    builder.addPiece(bridge);
+                    builder.getBoundingBox().encapsulate(bridge.getBoundingBox());
+                }
+            }
+        }
+    }
+    /**
+    * ==================================== ==================================== ====================================
+    * */
+    /**
+     * 辅助方法：动态获取对应层级 NBT 的高度
+     */
+    private int getLevelHeight(StructureTemplateManager manager, Rotation rot, String ns, int layerIndex) {
+        String name;
+        if (layerIndex == 0) name = "test_base_1";
+        else if (layerIndex == 1) name = "test_root_1";
+        else name = "test_upper_floor_1"; // 默认用标准楼层高度计算
+
+        ResourceLocation loc = ResourceLocation.fromNamespaceAndPath(ns, name);
+        return manager.get(loc).map(t -> t.getSize(rot).getY()).orElse(4); // 默认 4 格高
     }
 
     /**

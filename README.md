@@ -8,7 +8,7 @@
                     ▲                                
                     │              
                     │                                
-【标准楼层】        [upper_floor] (第二层及以上房屋) ──┬── [joint_w/e/s/n] (转向枢纽) ── [Bridge] (桥梁/栈道)
+【标准楼层】        [upper_floor] (第二层及以上房屋) ──┬── [joint_we/sn] (转向枢纽) ── [Bridge] (桥梁/栈道)
                     ▲                                │
                     │                                └── [platform] (随机生成的平台) ── [branch] (依附物)
                     │
@@ -22,3 +22,26 @@
 【地基】          [base] 
 ```
 
+_base_
+_root_ _path_  _root_platform_   
+_upper_floor_  _joint_we_ _joint_sn_ _bridge_ _branch_
+_roof_
+_unique_
+
+修改后的字段
+test_base_1
+test_root_1
+test_upper_floor_1
+test_roof_1
+
+
+test_path_1
+
+test_root_platform_1
+
+test_joint_we_1
+test_joint_sn_1
+test_bridge_1
+test_branch_1
+
+test_unique_1
