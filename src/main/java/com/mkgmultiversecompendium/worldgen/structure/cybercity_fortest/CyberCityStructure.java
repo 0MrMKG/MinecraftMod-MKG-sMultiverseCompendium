@@ -64,7 +64,7 @@ public class CyberCityStructure extends Structure {
         // ==========================================
         int housesPerRow = 5;       // 控制接口：每排生成几栋房子
         int streetWidth = 20;       // 控制接口：两排房子之间的“街道”宽度 (Z轴方向)
-        int houseSpacingX = 4;      // 【新增】控制接口：同一排房屋之间的距离 (X轴方向)
+        int houseSpacingX = -1;      // 【新增】控制接口：同一排房屋之间的距离 (X轴方向)
 
         // ==========================================
         // 1. 获取基础模块的原始尺寸 (Rotation.NONE)
